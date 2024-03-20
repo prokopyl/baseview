@@ -20,7 +20,8 @@ opengl = ["uuid", "x11/glx"]
 
 [dependencies]
 keyboard-types = { version = "0.6.1", default-features = false }
-raw-window-handle = "0.5"
+raw-window-handle_05 = { package = "raw-window-handle", version = "0.5.2", optional = true }
+raw-window-handle_06 = { package = "raw-window-handle", version = "0.6.0", optional = true }
 
 [target.'cfg(target_os="linux")'.dependencies]
 xcb = { version = "0.9", features = ["thread", "xlib_xcb", "dri2"] }

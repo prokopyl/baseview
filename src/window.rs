@@ -1,9 +1,5 @@
 use std::marker::PhantomData;
 
-use raw_window_handle::{
-    HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle,
-};
-
 use crate::event::{Event, EventStatus};
 use crate::window_open_options::WindowOpenOptions;
 use crate::{MouseCursor, Size};
@@ -23,7 +19,7 @@ pub struct WindowHandle {
 
 impl WindowHandle {
     fn new(window_handle: platform::WindowHandle) -> Self {
-        Self { window_handle, phantom: PhantomData::default() }
+        Self { window_handle, phantom: PhantomData }
     }
 
     /// Close the window
@@ -35,12 +31,6 @@ impl WindowHandle {
     /// if the window was closed/dropped.
     pub fn is_open(&self) -> bool {
         self.window_handle.is_open()
-    }
-}
-
-unsafe impl HasRawWindowHandle for WindowHandle {
-    fn raw_window_handle(&self) -> RawWindowHandle {
-        self.window_handle.raw_window_handle()
     }
 }
 
@@ -65,17 +55,6 @@ impl<'a> Window<'a> {
     #[cfg(not(target_os = "windows"))]
     pub(crate) fn new(window: platform::Window) -> Window {
         Window { window, phantom: PhantomData }
-    }
-
-    pub fn open_parented<P, H, B>(parent: &P, options: WindowOpenOptions, build: B) -> WindowHandle
-    where
-        P: HasRawWindowHandle,
-        H: WindowHandler + 'static,
-        B: FnOnce(&mut Window) -> H,
-        B: Send + 'static,
-    {
-        let window_handle = platform::Window::open_parented::<P, H, B>(parent, options, build);
-        WindowHandle::new(window_handle)
     }
 
     pub fn open_blocking<H, B>(options: WindowOpenOptions, build: B)
@@ -110,14 +89,90 @@ impl<'a> Window<'a> {
     }
 }
 
-unsafe impl<'a> HasRawWindowHandle for Window<'a> {
-    fn raw_window_handle(&self) -> RawWindowHandle {
-        self.window.raw_window_handle()
-    }
-}
+#[cfg(feature = "raw-window-handle_05")]
+const _: () = {
+    use raw_window_handle_05::{
+        HasRawDisplayHandle, HasRawWindowHandle, RawDisplayHandle, RawWindowHandle,
+    };
 
-unsafe impl<'a> HasRawDisplayHandle for Window<'a> {
-    fn raw_display_handle(&self) -> RawDisplayHandle {
-        self.window.raw_display_handle()
+    #[cfg(not(feature = "raw-window-handle_06"))]
+    impl<'a> Window<'a> {
+        pub fn open_parented<P, H, B>(
+            parent: &P, options: WindowOpenOptions, build: B,
+        ) -> WindowHandle
+        where
+            P: HasRawWindowHandle,
+            H: WindowHandler + 'static,
+            B: FnOnce(&mut Window) -> H,
+            B: Send + 'static,
+        {
+            WindowHandle::new(platform::Window::open_parented::<H, B>(
+                parent.raw_window_handle(),
+                options,
+                build,
+            ))
+        }
     }
-}
+
+    unsafe impl<'a> HasRawWindowHandle for Window<'a> {
+        fn raw_window_handle(&self) -> RawWindowHandle {
+            self.window.raw_window_handle()
+        }
+    }
+
+    unsafe impl<'a> HasRawDisplayHandle for Window<'a> {
+        fn raw_display_handle(&self) -> RawDisplayHandle {
+            self.window.raw_display_handle()
+        }
+    }
+
+    unsafe impl HasRawWindowHandle for WindowHandle {
+        fn raw_window_handle(&self) -> RawWindowHandle {
+            self.window_handle.raw_window_handle()
+        }
+    }
+};
+
+#[cfg(feature = "raw-window-handle_06")]
+const _: () = {
+    use raw_window_handle_06::{
+        DisplayHandle, HandleError, HasDisplayHandle, HasWindowHandle,
+        WindowHandle as RwhWindowHandle,
+    };
+
+    impl<'a> Window<'a> {
+        pub fn open_parented<P, H, B>(
+            parent: &P, options: WindowOpenOptions, build: B,
+        ) -> WindowHandle
+        where
+            P: HasWindowHandle,
+            H: WindowHandler + 'static,
+            B: FnOnce(&mut Window) -> H,
+            B: Send + 'static,
+        {
+            WindowHandle::new(platform::Window::open_parented::<H, B>(
+                parent.window_handle().unwrap(), // TODO: unwrap / document panic
+                options,
+                build,
+            ))
+        }
+    }
+
+    impl<'a> HasWindowHandle for Window<'a> {
+        fn window_handle(&self) -> Result<RwhWindowHandle, HandleError> {
+            self.window.window_handle()
+        }
+    }
+
+    impl<'a> HasDisplayHandle for Window<'a> {
+        fn display_handle(&self) -> Result<DisplayHandle, HandleError> {
+            self.window.display_handle()
+        }
+    }
+
+    impl HasWindowHandle for WindowHandle {
+        fn window_handle(&self) -> Result<RwhWindowHandle, HandleError> {
+            self.window_handle.window_handle()
+        }
+    }
+};
