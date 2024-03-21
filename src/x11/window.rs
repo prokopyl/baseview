@@ -121,6 +121,28 @@ impl<'a> Window<'a> {
         });
     }
 
+    fn open_parented_inner<H, B>(
+        parent_id: xcb::Window, options: WindowOpenOptions, build: B,
+    ) -> WindowHandle
+    where
+        H: WindowHandler + 'static,
+        B: FnOnce(&mut crate::Window) -> H,
+        B: Send + 'static,
+    {
+        let (tx, rx) = mpsc::sync_channel::<WindowOpenResult>(1);
+
+        let (parent_handle, mut window_handle) = ParentHandle::new();
+
+        thread::spawn(move || {
+            Self::window_thread(Some(parent_id), options, build, tx.clone(), Some(parent_handle));
+        });
+
+        let raw_window_handle = rx.recv().unwrap().unwrap();
+        window_handle.raw_window_handle = Some(raw_window_handle);
+
+        window_handle
+    }
+
     fn window_thread<H, B>(
         parent: Option<xcb::Window>, options: WindowOpenOptions, build: B,
         tx: mpsc::SyncSender<WindowOpenResult>, parent_handle: Option<ParentHandle>,
@@ -735,24 +757,7 @@ const _: () = {
                 h => panic!("unsupported parent handle type {:?}", h),
             };
 
-            let (tx, rx) = mpsc::sync_channel::<WindowOpenResult>(1);
-
-            let (parent_handle, mut window_handle) = ParentHandle::new();
-
-            thread::spawn(move || {
-                Self::window_thread(
-                    Some(parent_id),
-                    options,
-                    build,
-                    tx.clone(),
-                    Some(parent_handle),
-                );
-            });
-
-            let raw_window_handle = rx.recv().unwrap().unwrap();
-            window_handle.raw_window_handle = Some(raw_window_handle);
-
-            window_handle
+            Self::open_parented_inner(parent_id, options, build)
         }
     }
 };
@@ -833,24 +838,7 @@ const _: () = {
                 h => panic!("unsupported parent handle type {:?}", h),
             };
 
-            let (tx, rx) = mpsc::sync_channel::<WindowOpenResult>(1);
-
-            let (parent_handle, mut window_handle) = ParentHandle::new();
-
-            thread::spawn(move || {
-                Self::window_thread(
-                    Some(parent_id),
-                    options,
-                    build,
-                    tx.clone(),
-                    Some(parent_handle),
-                );
-            });
-
-            let raw_window_handle = rx.recv().unwrap().unwrap();
-            window_handle.raw_window_handle = Some(raw_window_handle);
-
-            window_handle
+            Self::open_parented_inner(parent_id, options, build)
         }
     }
 };
