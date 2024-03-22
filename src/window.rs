@@ -34,11 +34,12 @@ impl WindowHandle {
     }
 }
 
-pub trait WindowHandler {
-    fn on_frame(&mut self, window: &mut Window);
-    fn on_event(&mut self, window: &mut Window, event: Event) -> EventStatus;
+pub trait WindowHandler<'a>: 'a {
+    fn on_frame(&mut self, window: &mut Window<'a>);
+    fn on_event(&mut self, window: &mut Window<'a>, event: Event) -> EventStatus;
 }
 
+#[repr(transparent)]
 pub struct Window<'a> {
     window: platform::Window<'a>,
 
@@ -47,23 +48,15 @@ pub struct Window<'a> {
 }
 
 impl<'a> Window<'a> {
-    #[cfg(target_os = "windows")]
-    pub(crate) fn new(window: platform::Window<'a>) -> Window<'a> {
-        Window { window, phantom: PhantomData }
+    pub(crate) fn borrow_mut<'b>(window: &'b mut platform::Window<'a>) -> &'b mut Window<'a> {
+        // SAFETY: The two types are equivalent because of #[repr(transparent)]
+        unsafe { &mut *(window as *mut platform::Window<'a> as *mut Window<'a>) }
     }
 
-    #[cfg(not(target_os = "windows"))]
-    pub(crate) fn new(window: platform::Window) -> Window {
-        Window { window, phantom: PhantomData }
-    }
-
-    pub fn open_blocking<H, B>(options: WindowOpenOptions, build: B)
-    where
-        H: WindowHandler + 'static,
-        B: FnOnce(&mut Window) -> H,
-        B: Send + 'static,
-    {
-        platform::Window::open_blocking::<H, B>(options, build)
+    pub fn open_blocking<H: WindowHandler<'a>>(
+        options: WindowOpenOptions, build: impl FnOnce(&mut Window<'a>) -> H + Send + 'static,
+    ) {
+        platform::Window::open_blocking::<H>(options, build)
     }
 
     /// Close the window
@@ -102,7 +95,7 @@ const _: () = {
         ) -> WindowHandle
         where
             P: HasRawWindowHandle,
-            H: WindowHandler + 'static,
+            H: WindowHandler<'a>,
             B: FnOnce(&mut Window) -> H,
             B: Send + 'static,
         {
@@ -146,7 +139,7 @@ const _: () = {
         ) -> WindowHandle
         where
             P: HasWindowHandle,
-            H: WindowHandler + 'static,
+            H: WindowHandler<'a>,
             B: FnOnce(&mut Window) -> H,
             B: Send + 'static,
         {
@@ -156,17 +149,24 @@ const _: () = {
                 build,
             ))
         }
+
+        pub fn window_handle(&self) -> RwhWindowHandle<'a> {
+            self.window.window_handle()
+        }
+        pub fn display_handle(&self) -> DisplayHandle<'a> {
+            self.window.display_handle()
+        }
     }
 
     impl<'a> HasWindowHandle for Window<'a> {
-        fn window_handle(&self) -> Result<RwhWindowHandle, HandleError> {
-            self.window.window_handle()
+        fn window_handle(&self) -> Result<RwhWindowHandle<'a>, HandleError> {
+            Ok(self.window_handle())
         }
     }
 
     impl<'a> HasDisplayHandle for Window<'a> {
-        fn display_handle(&self) -> Result<DisplayHandle, HandleError> {
-            self.window.display_handle()
+        fn display_handle(&self) -> Result<DisplayHandle<'a>, HandleError> {
+            Ok(self.display_handle())
         }
     }
 

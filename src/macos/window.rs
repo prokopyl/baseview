@@ -16,11 +16,6 @@ use keyboard_types::KeyboardEvent;
 
 use objc::{msg_send, runtime::Object, sel, sel_impl};
 
-use raw_window_handle::{
-    AppKitDisplayHandle, AppKitWindowHandle, HasRawDisplayHandle, HasRawWindowHandle,
-    RawDisplayHandle, RawWindowHandle,
-};
-
 use crate::{
     Event, EventStatus, MouseCursor, Size, WindowHandler, WindowInfo, WindowOpenOptions,
     WindowScalePolicy,
@@ -43,12 +38,6 @@ impl WindowHandle {
 
     pub fn is_open(&self) -> bool {
         self.state.window_inner.open.get()
-    }
-}
-
-unsafe impl HasRawWindowHandle for WindowHandle {
-    fn raw_window_handle(&self) -> RawWindowHandle {
-        self.state.window_inner.raw_window_handle()
     }
 }
 
@@ -102,20 +91,6 @@ impl WindowInner {
             }
         }
     }
-
-    fn raw_window_handle(&self) -> RawWindowHandle {
-        if self.open.get() {
-            let ns_window = self.ns_window.get().unwrap_or(ptr::null_mut()) as *mut c_void;
-
-            let mut handle = AppKitWindowHandle::empty();
-            handle.ns_window = ns_window;
-            handle.ns_view = self.ns_view as *mut c_void;
-
-            return RawWindowHandle::AppKit(handle);
-        }
-
-        RawWindowHandle::AppKit(AppKitWindowHandle::empty())
-    }
 }
 
 pub struct Window<'a> {
@@ -123,10 +98,11 @@ pub struct Window<'a> {
 }
 
 impl<'a> Window<'a> {
-    pub fn open_parented<P, H, B>(parent: &P, options: WindowOpenOptions, build: B) -> WindowHandle
+    fn open_parented_inner<P, H, B>(
+        parent: id, options: WindowOpenOptions, build: B,
+    ) -> WindowHandle
     where
-        P: HasRawWindowHandle,
-        H: WindowHandler + 'static,
+        H: WindowHandler<'a>,
         B: FnOnce(&mut crate::Window) -> H,
         B: Send + 'static,
     {
@@ -138,12 +114,6 @@ impl<'a> Window<'a> {
         };
 
         let window_info = WindowInfo::from_logical_size(options.size, scaling);
-
-        let handle = if let RawWindowHandle::AppKit(handle) = parent.raw_window_handle() {
-            handle
-        } else {
-            panic!("Not a macOS window");
-        };
 
         let ns_view = unsafe { create_view(&options) };
 
@@ -162,7 +132,7 @@ impl<'a> Window<'a> {
         let window_handle = Self::init(window_inner, window_info, build);
 
         unsafe {
-            let _: id = msg_send![handle.ns_view as *mut Object, addSubview: ns_view];
+            let _: id = msg_send![parent, addSubview: ns_view];
 
             let () = msg_send![pool, drain];
         }
@@ -172,7 +142,7 @@ impl<'a> Window<'a> {
 
     pub fn open_blocking<H, B>(options: WindowOpenOptions, build: B)
     where
-        H: WindowHandler + 'static,
+        H: WindowHandler<'a>,
         B: FnOnce(&mut crate::Window) -> H,
         B: Send + 'static,
     {
@@ -248,7 +218,7 @@ impl<'a> Window<'a> {
 
     fn init<H, B>(window_inner: WindowInner, window_info: WindowInfo, build: B) -> WindowHandle
     where
-        H: WindowHandler + 'static,
+        H: WindowHandler<'a>,
         B: FnOnce(&mut crate::Window) -> H,
         B: Send + 'static,
     {
@@ -393,18 +363,6 @@ impl WindowState {
     }
 }
 
-unsafe impl<'a> HasRawWindowHandle for Window<'a> {
-    fn raw_window_handle(&self) -> RawWindowHandle {
-        self.inner.raw_window_handle()
-    }
-}
-
-unsafe impl<'a> HasRawDisplayHandle for Window<'a> {
-    fn raw_display_handle(&self) -> RawDisplayHandle {
-        RawDisplayHandle::AppKit(AppKitDisplayHandle::empty())
-    }
-}
-
 pub fn copy_to_clipboard(string: &str) {
     unsafe {
         let pb = NSPasteboard::generalPasteboard(nil);
@@ -415,3 +373,108 @@ pub fn copy_to_clipboard(string: &str) {
         pb.setString_forType(ns_str, cocoa::appkit::NSPasteboardTypeString);
     }
 }
+
+#[cfg(feature = "raw-window-handle_05")]
+const _: () = {
+    use core::ffi::c_void;
+    use raw_window_handle_05::{
+        AppKitDisplayHandle, AppKitWindowHandle, HasRawDisplayHandle, HasRawWindowHandle,
+        RawDisplayHandle, RawWindowHandle,
+    };
+
+    fn get_raw_window_handle(inner: &WindowInner) -> RawWindowHandle {
+        let mut handle = AppKitWindowHandle::empty();
+
+        if inner.open.get() {
+            handle.ns_window = inner.ns_window.get().unwrap_or(ptr::null_mut()) as *mut c_void;
+            handle.ns_view = inner.ns_view as *mut c_void;
+        }
+
+        handle.into()
+    }
+
+    unsafe impl HasRawWindowHandle for WindowHandle {
+        fn raw_window_handle(&self) -> RawWindowHandle {
+            get_raw_window_handle(&self.state.window_inner)
+        }
+    }
+
+    unsafe impl<'a> HasRawWindowHandle for Window<'a> {
+        fn raw_window_handle(&self) -> RawWindowHandle {
+            get_raw_window_handle(&self.inner)
+        }
+    }
+
+    unsafe impl<'a> HasRawDisplayHandle for Window<'a> {
+        fn raw_display_handle(&self) -> RawDisplayHandle {
+            AppKitDisplayHandle::empty().into()
+        }
+    }
+
+    #[cfg(not(feature = "raw-window-handle_06"))]
+    impl<'a> Window<'a> {
+        pub fn open_parented<H, B>(
+            parent: RawWindowHandle, options: WindowOpenOptions, build: B,
+        ) -> WindowHandle
+        where
+            H: WindowHandler<'a>,
+            B: FnOnce(&mut crate::Window) -> H,
+            B: Send + 'static,
+        {
+            let parent_handle = match parent {
+                RawWindowHandle::AppKit(handle) => handle,
+                _ => panic!("Not a macOS window"),
+            };
+
+            let parent_id = parent_handle.ns_view as id;
+
+            Self::open_parented_inner(parent_id, options, build)
+        }
+    }
+};
+
+#[cfg(feature = "raw-window-handle_06")]
+const _: () = {
+    use raw_window_handle_06::{
+        AppKitDisplayHandle, AppKitWindowHandle, DisplayHandle, HandleError, HasDisplayHandle,
+        HasWindowHandle, RawWindowHandle, WindowHandle as RwhWindowHandle,
+    };
+
+    impl HasWindowHandle for WindowHandle {
+        fn window_handle(&self) -> Result<RwhWindowHandle<'_>, HandleError> {
+            todo!()
+        }
+    }
+
+    impl<'a> HasWindowHandle for Window<'a> {
+        fn window_handle(&self) -> Result<RwhWindowHandle<'a>, HandleError> {
+            todo!()
+        }
+    }
+
+    impl<'a> HasDisplayHandle for Window<'a> {
+        fn display_handle(&self) -> Result<DisplayHandle, HandleError> {
+            todo!()
+        }
+    }
+
+    impl<'a> Window<'a> {
+        pub fn open_parented<H, B>(
+            parent: RwhWindowHandle, options: WindowOpenOptions, build: B,
+        ) -> WindowHandle
+        where
+            H: WindowHandler<'a>,
+            B: FnOnce(&mut crate::Window) -> H,
+            B: Send + 'static,
+        {
+            // Convert parent into something that X understands
+            let parent_id = match parent.as_raw() {
+                RawWindowHandle::Xlib(h) => h.window as u32,
+                RawWindowHandle::Xcb(h) => h.window.get(),
+                h => panic!("unsupported parent handle type {:?}", h),
+            };
+
+            Self::open_parented_inner(parent_id, options, build)
+        }
+    }
+};

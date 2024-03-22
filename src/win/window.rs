@@ -568,7 +568,7 @@ impl Window<'_> {
     pub fn open_parented<P, H, B>(parent: &P, options: WindowOpenOptions, build: B) -> WindowHandle
     where
         P: HasRawWindowHandle,
-        H: WindowHandler + 'static,
+        H: WindowHandler<'a>,
         B: FnOnce(&mut crate::Window) -> H,
         B: Send + 'static,
     {
@@ -584,7 +584,7 @@ impl Window<'_> {
 
     pub fn open_blocking<H, B>(options: WindowOpenOptions, build: B)
     where
-        H: WindowHandler + 'static,
+        H: WindowHandler<'a>,
         B: FnOnce(&mut crate::Window) -> H,
         B: Send + 'static,
     {
@@ -610,7 +610,7 @@ impl Window<'_> {
         parented: bool, parent: HWND, options: WindowOpenOptions, build: B,
     ) -> (WindowHandle, HWND)
     where
-        H: WindowHandler + 'static,
+        H: WindowHandler<'a>,
         B: FnOnce(&mut crate::Window) -> H,
         B: Send + 'static,
     {

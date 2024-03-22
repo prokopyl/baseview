@@ -11,7 +11,7 @@ authors = [
     "Joakim Frostegård <joakim.frostegard@gmail.com>",
     "Robbert van der Helm <mail@robbertvanderhelm.nl>",
 ]
-edition = "2018"
+edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [features]
@@ -41,3 +41,6 @@ uuid = { version = "0.8", features = ["v4"] }
 
 [dev-dependencies]
 rtrb = "0.2"
+softbuffer = "0.4.1"
+baseview = { path = ".", features = ["raw-window-handle_06"] }
+raw-window-handle_06 = { package = "raw-window-handle", version = "0.6.0" } # TODO: make proper example project, this is a mess
