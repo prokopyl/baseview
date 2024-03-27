@@ -8,8 +8,8 @@ use std::panic::AssertUnwindSafe;
 thread_local! {
     /// Used as part of [`XerrorHandler::handle()`]. When an X11 error occurs during this function,
     /// the error gets copied to this RefCell after which the program is allowed to resume. The
-    /// error can then be converted to a regular Rust Result value afterwards.
-    static CURRENT_X11_ERROR: RefCell<Option<xlib::XErrorEvent>> = RefCell::new(None);
+    /// error can then be converted to a regular Rust Result value afterward.
+    static CURRENT_X11_ERROR: RefCell<Option<xlib::XErrorEvent>> = const { RefCell::new(None) };
 }
 
 /// A helper struct for safe X11 error handling
