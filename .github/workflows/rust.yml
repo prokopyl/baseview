@@ -20,11 +20,9 @@ jobs:
       if: contains(matrix.os, 'ubuntu')
       run: sudo apt-get install libx11-xcb-dev libxcb-dri2-0-dev libgl1-mesa-dev libxcb-icccm4-dev libxcursor-dev
     - name: Install rust stable
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
-        profile: minimal
         toolchain: stable
-        override: true
     - name: Build Default
       run: cargo build --all --all-features  --verbose
     - name: Build All Features
@@ -42,28 +40,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: stable
-          override: true
+          components: clippy
       - name: Install XCB and GL dependencies
         if: contains(matrix.os, 'ubuntu')
         run: sudo apt-get install libx11-xcb-dev libxcb-dri2-0-dev libgl1-mesa-dev libxcb-icccm4-dev libxcursor-dev
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all --all-features -- -D warnings
+      - run: cargo clippy --all --all-features -- -D warnings
 
   rustfmt:
     name: Format check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          profile: minimal
           toolchain: stable
-          override: true
+          components: clippy
       - name: Format
         run: cargo fmt --all -- --check
