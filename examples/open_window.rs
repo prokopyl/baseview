@@ -78,7 +78,7 @@ fn main() {
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_secs(5));
 
-        if let Err(_) = tx.push(Message::Hello) {
+        if tx.push(Message::Hello).is_err() {
             println!("Failed sending message");
         }
     });
