@@ -24,7 +24,7 @@ jobs:
       with:
         toolchain: stable
     - name: Build Default
-      run: cargo build --all --all-features  --verbose
+      run: cargo build --all --verbose
     - name: Build All Features
       run: cargo build --all --all-features --verbose
     - name: Run tests
@@ -57,6 +57,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          components: clippy
+          components: rustfmt
       - name: Format
         run: cargo fmt --all -- --check
