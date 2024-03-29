@@ -30,7 +30,7 @@ jobs:
     - name: Run tests
       run: cargo test --workspace --all-targets --all-features --verbose
     - name: Check docs
-      run: cargo doc --all-targets --all-features --no-deps
+      run: cargo doc --examples --all-features --no-deps
 
   clippy:
     name: Clippy
